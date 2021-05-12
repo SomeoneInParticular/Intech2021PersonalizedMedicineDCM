@@ -251,7 +251,7 @@ if __name__ == '__main__':
                           block_generators=block_gens, output_builder=gen_classif_block,
                           update_trained=True).to(device)
 
-    for cycle in range(2):
+    for cycle in range(10):
         print("==========================================================================")
         print(f"Beginning Cycle {cycle}")
         print("==========================================================================")
