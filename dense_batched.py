@@ -1,20 +1,18 @@
 import argparse
-import copy
+from collections import OrderedDict
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
-
-from collections import OrderedDict
-from pathlib import Path
-
+from torch import nn
+from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import DataLoader, random_split
+from torchvision.models.densenet import _DenseBlock, _Transition
 
 import data_managers
 from cifar100coarse.cifar100coarse import CIFAR100Coarse
 from convnet_progressive import ProgressiveNN
-from torch import nn
-from torchvision.models.densenet import _DenseBlock, _Transition
 
 
 def init_convolve(no_features):
@@ -270,32 +268,36 @@ if __name__ == '__main__':
         loss_fn = nn.CrossEntropyLoss()
 
         print(f"Beginning Training")
+        # Initialize the optimizer and its attached scheduler
+        optim = torch.optim.Adam(model.parameters(), lr=0.1, betas=(0.99, 0.999), weight_decay=0.001)
 
-        def run_epochs(target_model, epoch_no, loss):
+        scheduler = MultiStepLR(optim, milestones=[
+            train_epochs // 2,
+            train_epochs * 3 // 4
+        ], gamma=0.1)
+
+        def run_epochs(target_model, epoch_no, optim, scheduler, loss):
             # Runs epoch_no epochs on the target model, using the provided optimizer to update the model and
             # the provided loss function to evaluate how "good" it during evaluation
             results = []
             for e in range(epoch_no):
-                print(f"Epoch {e + 1} (Progressive)\n----------------------------------------------------")
+                print(f"Epoch {e + 1}\n----------------------------------------------------")
 
-                # LR is dynamic to match the Huang et al paper
-                if cycle < 30:
-                    lr = 0.1
-                elif cycle < 60:
-                    lr = 0.01
-                else:
-                    lr = 0.001
+                # Training
                 base_data['epoch'] = [e]
-                optim = torch.optim.Adam(target_model.parameters(), lr=lr, betas=(0.99, 0.999), weight_decay=0.001)
                 losses = run_train_cycle(target_model, train_dataloader, loss, optim, device)
                 training_df = pd.DataFrame({**base_data, "losses": [losses]})
                 training_df.to_csv(train_output_file, mode='a', header=False, sep='\t')
 
+                # Testing/Validation
                 test_results = run_test_cycle(target_model, testing_dataloader, loss, device)
                 testing_df = pd.DataFrame({**base_data, **test_results})
                 testing_df.to_csv(test_output_file, mode='a', header=False, sep='\t')
                 results.append(test_results)
+
+                # Scheduler update
+                scheduler.step()
             return results
 
         # Run the training epochs for the set
-        results = run_epochs(model, train_epochs, loss_fn)
+        results = run_epochs(model, train_epochs, optim, scheduler, loss_fn)
