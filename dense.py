@@ -229,12 +229,6 @@ if __name__ == '__main__':
     # The layer counts for each block (based on DenseNet-169)
     block_config = (6, 12, 36, 36)
 
-    # Build the initial block list
-    init_blocks = build_init_blocks(block_config)
-
-    # Build the list of block generators for this model
-    block_gens = build_block_gens(block_config)
-
     # Prepare our data for the model
     training_data = CIFAR100Coarse(
         root="data",
@@ -265,6 +259,12 @@ if __name__ == '__main__':
         print("==========================================================================")
         print(f"Beginning Cycle {cycle}")
         print("==========================================================================")
+
+        # Build the initial block list
+        init_blocks = build_init_blocks(block_config)
+
+        # Build the list of block generators for this model
+        block_gens = build_block_gens(block_config)
 
         # Finally, build the model
         model = ProgressiveNN(input_shape=(3, 32, 32), initial_blocks=init_blocks,

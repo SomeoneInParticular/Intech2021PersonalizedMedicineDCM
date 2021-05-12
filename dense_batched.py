@@ -46,12 +46,6 @@ if __name__ == '__main__':
     # The layer counts for each block (based on DenseNet-169)
     block_config = (6, 12, 36, 36)
 
-    # The set of dense block parameters (for initial blocks)
-    init_blocks = build_init_blocks(block_config)
-
-    # Initialize the block generator with a convolve of half that size
-    block_gens = build_block_gens(block_config)
-
     # Prepare our data for the model
     training_data = CIFAR100Coarse(
         root="data",
@@ -91,6 +85,12 @@ if __name__ == '__main__':
         print("==========================================================================")
         print(f"Beginning Cycle {cycle}")
         print("==========================================================================")
+
+        # The set of dense block parameters (for initial blocks)
+        init_blocks = build_init_blocks(block_config)
+
+        # Initialize the block generator with a convolve of half that size
+        block_gens = build_block_gens(block_config)
 
         # Rebuild the model
         model = ProgressiveNN(input_shape=(3, 32, 32), initial_blocks=init_blocks,
