@@ -12,4 +12,4 @@ source activate PyTorchEnv
 
 echo "Preparations complete! Running code!"
 
-python "/home/kalum.ost/intechChapter/dense.py" -o "/home/kalum.ost/intechChapter/outputs/full_set/dense" -c 10 -et 300 -ep 10 -mp 20 -b 256
+python "/home/kalum.ost/intechChapter/dense.py" -o "/home/kalum.ost/intechChapter/outputs/full_set/dense" -c 10 -et 300 -ep 10 -mp 20 -b 64

@@ -25,6 +25,107 @@ def init_convolve(no_features):
     ]))
 
 
+def build_init_blocks(block_config):
+    # Initialize the initial block list with 64 features
+    init_blocks = [
+        init_convolve(64)
+    ]
+
+    # The set of dense block parameters (for initial blocks)
+    no_features = 64
+    growth_rate = 32
+    # Build up the set of initial blocks for the model
+    for i, no_layers in enumerate(block_config):
+        dense_block = _DenseBlock(
+            num_layers=no_layers,
+            num_input_features=no_features,
+            bn_size=4,
+            growth_rate=growth_rate,
+            drop_rate=0
+        )
+        no_features = no_features + no_layers * growth_rate
+        if i < len(block_config) - 1:
+            trans_block = _Transition(num_input_features=no_features,
+                                      num_output_features=no_features // 2)
+            full_block = nn.Sequential(dense_block, trans_block)
+            init_blocks.append(full_block)
+            no_features = no_features // 2
+        else:
+            init_blocks.append(dense_block)
+
+    # The final batch norm
+    init_blocks.append(nn.BatchNorm2d(no_features))
+
+    return init_blocks
+
+
+# A function generate Dense block generator functions
+def dense_block_func_gen(no_layers: int, growth_rate: int,
+                         bn_size: int, drop_rate: float,
+                         should_transition: bool = True):
+    def dense_block_gen(in_shape):
+        all_blocks = []
+        no_features = in_shape[0]
+        # The dense block itself
+        dense_block = _DenseBlock(
+            num_layers=no_layers,
+            num_input_features=no_features,
+            bn_size=bn_size,
+            growth_rate=growth_rate,
+            drop_rate=drop_rate
+        )
+        all_blocks.append(dense_block)
+        # The transition block, if requested
+        if should_transition:
+            # Determine the output shape directly
+            x = torch.rand(256, *in_shape)
+            no_features = dense_block(x).shape[1]
+            trans_block = _Transition(num_input_features=no_features,
+                                      num_output_features=no_features // 2)
+            all_blocks.append(trans_block)
+        # A 20% dropout layer to help reduce over-fitting (matching Huang et al.)
+        all_blocks.append(nn.Dropout2d(0.2))
+        return nn.Sequential(*all_blocks)
+
+    return dense_block_gen
+
+
+def build_block_gens(block_config):
+    # Halved growth rate for subsequent blocks added via progression
+    growth_rate = 16
+
+    # Initialize the block generator with a convolve of half that size
+    block_gens = [
+        lambda in_shape: init_convolve(32)
+    ]
+
+    # Add the remaining block generators for this model
+    for i, no_layers in enumerate(block_config):
+        should_transition = i < len(block_config) - 1
+        new_gen = dense_block_func_gen(no_layers, growth_rate,
+                                       4, 0, should_transition)
+        block_gens.append(new_gen)
+
+    block_gens.append(
+        lambda in_shape: nn.BatchNorm2d(in_shape[0])
+    )
+
+    return block_gens
+
+
+def gen_classif_block(in_shape: np.array):
+    # The output block generator
+    no_classes = 20
+
+    return nn.Sequential(
+        nn.ReLU(),
+        nn.AdaptiveAvgPool2d((1, 1)),
+        nn.Flatten(1),
+        nn.Linear(np.prod(in_shape), no_classes),
+        nn.Softmax(dim=1)  # To match the setup of the ConvNet
+    )
+
+
 def run_train_cycle(model, dataloader, loss_fn, optim, device, report_rate=50):
     """
     Run a training cycle on a model
@@ -125,94 +226,14 @@ if __name__ == '__main__':
     # Identify whether a CUDA GPU is available to run the analyses on
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Initialize the initial block list with 64 features
-    init_blocks = [
-        init_convolve(64)
-    ]
-
     # The layer counts for each block (based on DenseNet-169)
     block_config = (6, 12, 36, 36)
-    # The set of dense block parameters (for initial blocks)
-    no_features = 64
-    growth_rate = 32
-    # Build up the set of initial blocks for the model
-    for i, no_layers in enumerate(block_config):
-        dense_block = _DenseBlock(
-            num_layers=no_layers,
-            num_input_features=no_features,
-            bn_size=4,
-            growth_rate=growth_rate,
-            drop_rate=0
-        )
-        no_features = no_features + no_layers * growth_rate
-        if i < len(block_config)-1:
-            trans_block = _Transition(num_input_features=no_features,
-                                      num_output_features=no_features // 2)
-            full_block = nn.Sequential(dense_block, trans_block)
-            init_blocks.append(full_block)
-            no_features = no_features // 2
-        else:
-            init_blocks.append(dense_block)
 
-    # The final batch norm
-    init_blocks.append(nn.BatchNorm2d(no_features))
+    # Build the initial block list
+    init_blocks = build_init_blocks(block_config)
 
-    # A function generate Dense block generator functions
-    def dense_block_func_gen(no_layers: int, growth_rate: int,
-                             bn_size: int, drop_rate: float,
-                             should_transition: bool = True):
-        def dense_block_gen(in_shape):
-            no_features = in_shape[0]
-            dense_block = _DenseBlock(
-                num_layers=no_layers,
-                num_input_features=no_features,
-                bn_size=bn_size,
-                growth_rate=growth_rate,
-                drop_rate=drop_rate
-            )
-            if should_transition:
-                # Determine the output shape directly
-                x = torch.rand(256, *in_shape)
-                no_features = dense_block(x).shape[1]
-                trans_block = _Transition(num_input_features=no_features,
-                                          num_output_features=no_features // 2)
-                full_block = nn.Sequential(dense_block, trans_block)
-                return full_block
-            else:
-                return dense_block
-
-        return dense_block_gen
-
-    # Halved growth rate for subsequent blocks added via progression
-    growth_rate = 16
-
-    # Initialize the block generator with a convolve of half that size
-    block_gens = [
-        lambda in_shape: init_convolve(32)
-    ]
-
-    # Add the remaining block generators for this model
-    for i, no_layers in enumerate(block_config):
-        should_transition = i < len(block_config)-1
-        new_gen = dense_block_func_gen(no_layers, growth_rate,
-                                       4, 0, should_transition)
-        block_gens.append(new_gen)
-
-    block_gens.append(
-        lambda in_shape: nn.BatchNorm2d(in_shape[1])
-    )
-
-    # The output block generator
-    no_classes = 20
-
-    def gen_classif_block(in_shape: np.array):
-        return nn.Sequential(
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(1),
-            nn.Linear(np.prod(in_shape), no_classes),
-            nn.Softmax(dim=1)  # To match the setup of the ConvNet
-        )
+    # Build the list of block generators for this model
+    block_gens = build_block_gens(block_config)
 
     # Prepare our data for the model
     training_data = CIFAR100Coarse(
@@ -260,11 +281,10 @@ if __name__ == '__main__':
 
         # Initialize the loss and optimization functions
         loss_fn = nn.CrossEntropyLoss()
-        train_optim = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.99, 0.999), weight_decay=0.001)
+        optim = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.001, momentum=0.9, dampening=0)
 
         print(f"Beginning Training")
         # Initialize the optimizer and its attached scheduler
-        optim = torch.optim.Adam(model.parameters(), lr=0.1, betas=(0.99, 0.999), weight_decay=0.001)
 
         scheduler = MultiStepLR(optim, milestones=[
             train_epochs // 2,

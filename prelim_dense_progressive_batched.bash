@@ -10,4 +10,4 @@ source activate PyTorchEnv
 
 echo "Preparations complete! Running code!"
 
-python "/home/kalum.ost/intechChapter/dense_progressive_batched.py" -o "/home/kalum.ost/intechChapter/outputs/batched/dense_progressive" -et 300 -ep 10 -mp 20 -b 256
+python "/home/kalum.ost/intechChapter/dense_progressive_batched.py" -o "/home/kalum.ost/intechChapter/outputs/batched/dense_progressive" -et 300 -ep 10 -mp 20 -b 64
