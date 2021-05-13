@@ -26,13 +26,13 @@ def init_convolve(no_features):
 
 
 def build_init_blocks(block_config):
-    # Initialize the initial block list with 64 features
+    # Initialize the initial block list, containing an init-convolve with 64 features
+    no_features = 64
     init_blocks = [
-        init_convolve(64)
+        init_convolve(no_features)
     ]
 
     # The set of dense block parameters (for initial blocks)
-    no_features = 64
     growth_rate = 32
     # Build up the set of initial blocks for the model
     for i, no_layers in enumerate(block_config):
@@ -124,6 +124,18 @@ def gen_classif_block(in_shape: np.array):
         nn.Linear(np.prod(in_shape), no_classes),
         nn.Softmax(dim=1)  # To match the setup of the ConvNet
     )
+
+
+def init_model_weights(model):
+    # Official init from torch repo.
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight)
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight, 1)
+            nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.constant_(m.bias, 0)
 
 
 def run_train_cycle(model, dataloader, loss_fn, optim, device, report_rate=50):
@@ -227,7 +239,7 @@ if __name__ == '__main__':
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # The layer counts for each block (based on DenseNet-169)
-    block_config = (6, 12, 36, 36)
+    block_config = (6, 12, 32, 32)
 
     # Prepare our data for the model
     training_data = CIFAR100Coarse(
@@ -266,10 +278,11 @@ if __name__ == '__main__':
         # Build the list of block generators for this model
         block_gens = build_block_gens(block_config)
 
-        # Finally, build the model
+        # Finally, build the model, copying the init system from TorchVision
         model = ProgressiveNN(input_shape=(3, 32, 32), initial_blocks=init_blocks,
                               block_generators=block_gens, output_builder=gen_classif_block,
                               update_trained=True).to(device)
+        init_model_weights(model)
 
         base_data = {
             "model": ["Progressive"],

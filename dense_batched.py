@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader, random_split
 import data_managers
 from cifar100coarse.cifar100coarse import CIFAR100Coarse
 from convnet_progressive import ProgressiveNN
-from dense import build_init_blocks, build_block_gens, gen_classif_block, run_train_cycle, run_test_cycle
-
+from dense import build_init_blocks, build_block_gens, gen_classif_block, run_train_cycle, run_test_cycle, \
+    init_model_weights
 
 if __name__ == '__main__':
     # Parse the command line arguments
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # The layer counts for each block (based on DenseNet-169)
-    block_config = (6, 12, 36, 36)
+    block_config = (6, 12, 32, 32)
 
     # Prepare our data for the model
     training_data = CIFAR100Coarse(
@@ -92,10 +92,11 @@ if __name__ == '__main__':
         # Initialize the block generator with a convolve of half that size
         block_gens = build_block_gens(block_config)
 
-        # Rebuild the model
+        # Finally, build the model, copying the init system from TorchVision
         model = ProgressiveNN(input_shape=(3, 32, 32), initial_blocks=init_blocks,
                               block_generators=block_gens, output_builder=gen_classif_block,
                               update_trained=True).to(device)
+        init_model_weights(model)
 
         base_data = {
             "model": ["Progressive"],
