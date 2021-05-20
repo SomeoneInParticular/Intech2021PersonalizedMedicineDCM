@@ -116,7 +116,7 @@ if __name__ == '__main__':
         print(f"Beginning Training")
 
         # Initialize the optimizer and its attached scheduler
-        optim = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.001, momentum=0.9, dampening=0)
+        optim = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.0001, momentum=0.9, dampening=0)
 
         scheduler = MultiStepLR(optim, milestones=[
             train_epochs // 2,

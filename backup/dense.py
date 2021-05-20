@@ -41,10 +41,10 @@ def build_init_blocks(block_config):
             num_input_features=no_features,
             bn_size=4,
             growth_rate=growth_rate,
-            drop_rate=0
+            drop_rate=0.2
         )
         no_features = no_features + no_layers * growth_rate
-        if i < len(block_config) - 1:
+        if i != len(block_config) - 1:
             trans_block = _Transition(num_input_features=no_features,
                                       num_output_features=no_features // 2)
             full_block = nn.Sequential(dense_block, trans_block)
@@ -83,9 +83,10 @@ def dense_block_func_gen(no_layers: int, growth_rate: int,
             trans_block = _Transition(num_input_features=no_features,
                                       num_output_features=no_features // 2)
             all_blocks.append(trans_block)
-        # A 20% dropout layer to help reduce over-fitting (matching Huang et al.)
-        all_blocks.append(nn.Dropout2d(0.2))
-        return nn.Sequential(*all_blocks)
+        # Initialize the new block's weights in the same way the main model is
+        ret_module = nn.Sequential(*all_blocks)
+        init_model_weights(ret_module)
+        return ret_module
 
     return dense_block_gen
 
@@ -101,9 +102,9 @@ def build_block_gens(block_config):
 
     # Add the remaining block generators for this model
     for i, no_layers in enumerate(block_config):
-        should_transition = i < len(block_config) - 1
+        should_transition = (i != len(block_config) - 1)
         new_gen = dense_block_func_gen(no_layers, growth_rate,
-                                       4, 0, should_transition)
+                                       4, 0.2, should_transition)
         block_gens.append(new_gen)
 
     block_gens.append(
@@ -122,7 +123,7 @@ def gen_classif_block(in_shape: np.array):
         nn.AdaptiveAvgPool2d((1, 1)),
         nn.Flatten(1),
         nn.Linear(np.prod(in_shape), no_classes),
-        nn.Softmax(dim=1)  # To match the setup of the ConvNet
+        # nn.Softmax(dim=1)  # To match the setup of the ConvNet
     )
 
 
@@ -155,14 +156,16 @@ def run_train_cycle(model, dataloader, loss_fn, optim, device, report_rate=50):
         # Load the data into the device for processing
         X, y = X.to(device), y.to(device)
 
-        # Prediction loss calc
-        pred = model(data=X)
-        loss = loss_fn(pred, y)
-        losses.append(float(loss.cpu().detach().numpy()))
-
-        # Backpropagation to update the model
+        # Reset the optimizer
         optim.zero_grad()
+
+        # Begin predictions for the model
+        pred = model(data=X)
+
+        # Backpropagate the losses
+        loss = loss_fn(pred, y)
         loss.backward()
+        losses.append(float(loss.cpu().detach().numpy()))
         optim.step()
 
         # Report loss every 100 batches
@@ -292,17 +295,16 @@ if __name__ == '__main__':
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
         testing_dataloader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
-        # Initialize the loss and optimization functions
+        # Initialize the loss and optimization parameters
         loss_fn = nn.CrossEntropyLoss()
-        optim = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.001, momentum=0.9, dampening=0)
-
-        print(f"Beginning Training")
-        # Initialize the optimizer and its attached scheduler
-
+        optim = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=0.0001, momentum=0.9, dampening=0)
         scheduler = MultiStepLR(optim, milestones=[
             train_epochs // 2,
             train_epochs * 3 // 4
         ], gamma=0.1)
+
+        print(f"Beginning Training")
+        # Initialize the optimizer and its attached scheduler
 
         def run_epochs(target_model, epoch_no, optim, scheduler, loss):
             # Runs epoch_no epochs on the target model, using the provided optimizer to update the model and

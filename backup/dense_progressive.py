@@ -105,11 +105,10 @@ if __name__ == '__main__':
 
         # Initialize the loss and optimization functions
         loss_fn = nn.CrossEntropyLoss()
-        train_optim = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.99, 0.999), weight_decay=0.001)
 
         print(f"Beginning Training")
         # Initialize the optimizer and its attached scheduler
-        optim = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.001, momentum=0.9, dampening=0)
+        optim = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.0001, momentum=0.9, dampening=0)
 
         scheduler = MultiStepLR(optim, milestones=[
             train_epochs // 2,

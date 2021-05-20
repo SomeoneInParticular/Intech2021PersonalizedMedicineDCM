@@ -4,7 +4,7 @@ import torchvision.transforms as tt
 from cifar100coarse.cifar100coarse import CIFAR100Coarse
 
 
-stats = ((0.5074,0.4867,0.4411),(0.2011,0.1987,0.2025))
+stats = ((0.5074, 0.4867, 0.4411), (0.2011, 0.1987, 0.2025))
 train_transform = tt.Compose([
     tt.RandomHorizontalFlip(),
     tt.RandomCrop(32, padding=4, padding_mode='reflect'),

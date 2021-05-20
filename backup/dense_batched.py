@@ -107,16 +107,15 @@ if __name__ == '__main__':
         testing_dataloader = DataLoader(testing_sets[cycle], batch_size=batch_size, shuffle=True)
 
         # Initialize the loss function
+        # Initialize the loss and optimization parameters
         loss_fn = nn.CrossEntropyLoss()
-
-        print(f"Beginning Training")
-        # Initialize the optimizer and its attached scheduler
-        optim = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.001, momentum=0.9, dampening=0)
-
+        optim = torch.optim.SGD(model.parameters(), lr=0.0001, weight_decay=0.0001, momentum=0.9, dampening=0)
         scheduler = MultiStepLR(optim, milestones=[
             train_epochs // 2,
             train_epochs * 3 // 4
         ], gamma=0.1)
+
+        print(f"Beginning Training")
 
         def run_epochs(target_model, epoch_no, optim, scheduler, loss):
             # Runs epoch_no epochs on the target model, using the provided optimizer to update the model and

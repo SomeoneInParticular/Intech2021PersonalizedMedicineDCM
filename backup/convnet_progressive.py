@@ -125,7 +125,7 @@ class ProgressiveNN(nn.Module):
             self.output_layer = None
             if output_builder is not None:
                 self.output_layer = output_builder(x.shape[1:])
-                self.add_module("output", self.output_layer)
+                self.add_module(ProgressiveNN.OUT_LAYER_NAME, self.output_layer)
 
         # The pruning methodology to employ on the branch
         if pruning_method is None:
@@ -216,6 +216,7 @@ class ProgressiveNN(nn.Module):
 
         # Pass the input data through the first set of layers
         first_blocks = [b[0] for b in self._prior_blocks]
+        # Newest block appended last, as it produces the final (newest) tensor
         first_blocks.append(self._current_blocks[0])
         for block in first_blocks:
             x = block(data)
@@ -226,6 +227,7 @@ class ProgressiveNN(nn.Module):
         for block_index in range(1, len(self._current_blocks)):
             block_index = block_index
             blocks = [b[block_index] for b in self._prior_blocks]
+            # Newest block appended last to received the fully concatenated set of priors
             blocks.append(self._current_blocks[block_index])
             # Chained concatenate of incrementally increasing size
             for i, b in enumerate(blocks):
